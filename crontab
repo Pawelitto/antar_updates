@@ -1,0 +1,5 @@
+# Set PATH for cron
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/bin/python3
+
+0 0 * * * cd /app && python3 /app/main.py >> /var/log/cron.log 2>&1
+# END CRON JOB

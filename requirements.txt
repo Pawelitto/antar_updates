@@ -1,0 +1,5 @@
+pandas
+chardet
+openpyxl
+requests
+schedule

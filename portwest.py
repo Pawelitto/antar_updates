@@ -2,65 +2,66 @@ import os
 import requests
 import pandas as pd
 from ftplib import FTP
+from dotenv import load_dotenv
 
 print("Portwest - Rozpoczęto pracę nad Portwest...")
 
-# URL do pliku CSV
-url = "http://d11ak7fd9ypfb7.cloudfront.net/marketing_files/simple_soh/simpleSOH20.csv"
+# Załaduj zmienne środowiskowe
+load_dotenv()
 
-# Pobranie pliku CSV
-response = requests.get(url)
-if response.status_code == 200:
-    with open("portwest.csv", 'wb') as file:
-        file.write(response.content)
-else:
-    print("Portwest - Nie udało się pobrać pliku CSV.")
-    exit()
-
-# Wczytanie pliku CSV do DataFrame
-df = pd.read_csv("portwest.csv")
-
-# Zmiana nazw kolumn: 'Item' na 'Symbol', 'SoH' na 'Stany'
-df.rename(columns={'Item': 'Symbol', 'SoH': 'Stany'}, inplace=True)
-
-# Modyfikacja kolumny 'Stany': zamiana liczby na 'dostępny' lub 'niedostępny'
-df['Stany'] = df['Stany'].apply(lambda x: True if x > 0 else False)
-
-# Utworzenie podkatalogu 'data' jeżeli nie istnieje
-if not os.path.exists('data'):
-    os.makedirs('data')
-
-# Zapisanie wynikowego pliku w formacie Excel w podkatalogu 'data'
+# Ścieżki plików lokalnych
+csv_file = 'portwest.csv'
 output_file = 'portwest.xlsx'
-df.to_excel(output_file, index=False, engine='openpyxl')
 
-# Połączenie z serwerem FTP
-ftp_server = 'ftp.antar.pl'
-ftp_login = 'portwest'
-ftp_password = 'zSPnQ4n!'
+# Dane z .env
+url = os.getenv('PORTWEST_CSV_URL')
+ftp_server = os.getenv('FTP_HOST')
+ftp_user = os.getenv('PORTWEST_FTP_USER')
+ftp_pass = os.getenv('PORTWEST_FTP_PASS')
+ftp_folder = os.getenv('PORTWEST_FTP_FOLDER', 'data')
 
 try:
-        # Nawiązanie połączenia z serwerem FTP
+    # Pobranie pliku CSV
+    response = requests.get(url)
+    response.raise_for_status()
+
+    with open(csv_file, 'wb') as file:
+        file.write(response.content)
+
+    print("Portwest - CSV został pobrany pomyślnie.")
+
+    # Wczytanie i przetwarzanie pliku
+    df = pd.read_csv(csv_file)
+
+    df.rename(columns={'Item': 'Kod', 'SoH': 'SoH'}, inplace=True)
+    df['SoH'] = df['SoH'].apply(lambda x: x > 0)
+
+    df.to_excel(output_file, index=False, engine='openpyxl')
+
+    # Połączenie z FTP i przesłanie pliku
+    try:
         ftp = FTP(ftp_server)
-        ftp.login(ftp_login, ftp_password)
-        
-        # Przejście do folderu 'data' na serwerze FTP
-        ftp.cwd('data')
+        ftp.login(ftp_user, ftp_pass)
+        ftp.cwd(ftp_folder)
 
-        # Otwieranie pliku i przesyłanie go na serwer FTP
         with open(output_file, 'rb') as file:
-            ftp.storbinary(f'STOR portwest.xlsx', file)
-        
-        print(f"Portwest - Plik '{output_file}' został pomyślnie zapisany na serwerze FTP w folderze 'data'.")
+            ftp.storbinary(f'STOR {output_file}', file)
 
-        # Zamknięcie połączenia FTP
+        print(f"Portwest - Plik '{output_file}' został wysłany na FTP do folderu '{ftp_folder}'.")
         ftp.quit()
-        
-        # Usunięcie lokalnego pliku po przesłaniu
-        os.remove(output_file)
-        os.remove('portwest.csv')
+
+    except Exception as ftp_err:
+        print(f"Portwest - Błąd FTP: {ftp_err}")
 
 except Exception as e:
-        print(f'Portwest - Wystąpił błąd podczas połączenia z FTP lub przesyłania pliku: {e}')
+    print(f"Portwest - Błąd ogólny: {e}")
 
-print(f"Portwest - Proces dla Portwest zakończony pomyślnie. Plik zapisano jako {output_file}.")
+finally:
+    # Usuwanie tymczasowych plików
+    for path in [csv_file, output_file]:
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+                print(f"Portwest - Usunięto tymczasowy plik: {path}")
+            except Exception as cleanup_err:
+                print(f"Portwest - Błąd przy usuwaniu '{path}': {cleanup_err}")

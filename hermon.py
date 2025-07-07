@@ -2,11 +2,14 @@ import os
 import pandas as pd
 import requests
 from ftplib import FTP
+from dotenv import load_dotenv
+
+load_dotenv()
 
 file_path = 'common_kody.xlsx'
 output_file = 'hermon.xlsx'
 
-# Wczytanie pliku Excel
+# Wczytywanie danych z Excela
 try:
     excel_data = pd.read_excel(file_path)
     print("Hermon - Plik został wczytany pomyślnie.")
@@ -17,81 +20,73 @@ except Exception as e:
     print(f"Hermon - Wystąpił błąd podczas wczytywania pliku: {e}")
     exit()
 
+# Sprawdzenie kolumny
 if 'Kod towaru' not in excel_data.columns:
     print("Hermon - Brak kolumny 'Kod towaru' w pliku.")
     exit()
 
+# Lista kodów
 kody_towaru = excel_data['Kod towaru'].tolist()
 
+# Dane z .env
+api_base = os.getenv('HERMON_API_URL')
+login = os.getenv('HERMON_LOGIN')
+password = os.getenv('HERMON_PASSWORD')
+
+ftp_server = os.getenv('FTP_HOST')
+ftp_user = os.getenv('HERMON_FTP_USER')
+ftp_pass = os.getenv('HERMON_FTP_PASS')
+ftp_folder = os.getenv('HERMON_FTP_FOLDER', 'data')
+
 # Autoryzacja
-auth_url = "http://78.31.93.254:81/client-service/authenticate"
-auth_data = {
-    "Login": "018249",
-    "Password": "Antar-12345"
-}
-ftp_server = 'ftp.antar.pl'
-ftp_login = 'hermon'
-ftp_password = '#frJv8PmL'
-
 try:
-    auth_response = requests.post(auth_url, json=auth_data)
+    auth_response = requests.post(f"{api_base}/authenticate", json={"Login": login, "Password": password})
     auth_response.raise_for_status()
+
     token = auth_response.json().get('token')
-
     if not token:
-        print("Hermon - Nie udało się uzyskać tokenu autoryzacyjnego.")
+        print("Hermon - Nie udało się uzyskać tokenu.")
         exit()
-
-    print("Hermon - Token autoryzacyjny uzyskany pomyślnie.")
+    print("Hermon - Token autoryzacyjny uzyskany.")
 
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
 
-    url = "http://78.31.93.254:81/client-service/articles"
-    response = requests.post(url, json=kody_towaru, headers=headers)
+    # Pobieranie danych
+    articles_url = f"{api_base}/articles"
+    response = requests.post(articles_url, json=kody_towaru, headers=headers)
     response.raise_for_status()
 
-    print("Hermon - Zapytanie wysłane pomyślnie.")
-
     data = response.json()
+    print("Hermon - Dane pobrane pomyślnie.")
 
     # Przetwarzanie danych
-    ids = []
-    availability = []
-
+    results = []
     for item in data:
-        item_id = item.get('id')
-        if not item_id:
+        kod = item.get('id')
+        if not kod:
             continue
 
         branches = item.get('branchesAvailability', [])
-        is_available = False
-        if branches:
-            quantity = branches[0].get('quantity', '0')
-            is_available = quantity != '0'
+        quantity = branches[0].get('quantity', '0') if branches else '0'
+        soh = quantity != '0'
+        results.append({'Kod': kod, 'SoH': soh})
 
-        ids.append(item_id)
-        availability.append(is_available)
-
-    df = pd.DataFrame({
-        'Kod': ids,
-        'SoH': availability
-    })
-
+    df = pd.DataFrame(results)
     df.to_excel(output_file, index=False)
 
-    # FTP Upload
+    # Wysyłka FTP
     try:
         ftp = FTP(ftp_server)
-        ftp.login(ftp_login, ftp_password)
-        ftp.cwd('data')
+        ftp.login(ftp_user, ftp_pass)
+        ftp.cwd(ftp_folder)
 
-        with open(output_file, 'rb') as file:
-            ftp.storbinary(f'STOR {output_file}', file)
+        with open(output_file, 'rb') as f:
+            ftp.storbinary(f'STOR {output_file}', f)
 
-        print(f"Hermon - Plik '{output_file}' został pomyślnie zapisany na serwerze FTP w folderze 'data'.")
+        print(f"Hermon - Plik '{output_file}' wysłany na FTP do folderu '{ftp_folder}'.")
         ftp.quit()
 
     except Exception as ftp_err:
@@ -99,12 +94,11 @@ try:
 
 except requests.exceptions.RequestException as req_err:
     print(f"Hermon - Błąd HTTP: {req_err}")
-
 except Exception as e:
     print(f"Hermon - Inny błąd: {e}")
 
 finally:
-    # Usuń tylko plik wynikowy, nie dotykaj common_kody.xlsx
+    # Usunięcie tylko pliku wynikowego
     if os.path.exists(output_file):
         try:
             os.remove(output_file)

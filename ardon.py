@@ -7,7 +7,7 @@ from ftplib import FTP
 print("Ardon - Rozpoczęto pracę nad Ardon...")
 
 # URL do pliku XML
-url = "http://www.ardon.pl/data-feed/ff2042f7-5fe8-4fbf-988d-335b1e8bb0e8"
+url = "https://www.ardon.pl/data-feed/ff2042f7-5fe8-4fbf-988d-335b1e8bb0e8"
 
 # Pobranie pliku XML
 response = requests.get(url, verify=False)
@@ -36,12 +36,12 @@ for item in root.findall('.//SHOPITEM'):
 
 # Tworzenie DataFrame z wyciągniętych danych
 df = pd.DataFrame({
-    'Symbol': item_codes,
-    'Stany': amounts_in_stock
+    'Kod': item_codes,
+    'SoH': amounts_in_stock
 })
 
-# Modyfikacja kolumny 'Stany'
-df['Stany'] = df['Stany'].apply(lambda x: True if int(x) > 0 else False)
+# Modyfikacja kolumny 'SoH'
+df['SoH'] = df['SoH'].apply(lambda x: True if int(x) > 0 else False)
 
 # Zapisanie wynikowego pliku w formacie Excel do bufora w pamięci
 output_path = 'ardon.xlsx'
@@ -53,25 +53,20 @@ ftp_login = 'ardon'
 ftp_password = '4_SHAXsqdAsp'
 
 try:
-    # Nawiązanie połączenia z serwerem FTP
     ftp = FTP(ftp_server)
     ftp.login(ftp_login, ftp_password)
-
-    # Przejście do folderu 'data'
     ftp.cwd('data')
     
-    # Otwieranie pliku i przesyłanie go na serwer FTP
     with open(output_path, 'rb') as file:
         ftp.storbinary(f'STOR {output_path}', file)
-    
-    print(f"Ardon - Plik '{output_path}' został pomyślnie zapisany na serwerze FTP.")
 
-    # Zamknięcie połączenia FTP
+    print(f"Ardon - Plik '{output_path}' został pomyślnie zapisany na serwerze FTP.")
     ftp.quit()
-    
-    # Usunięcie lokalnych plików po przesłaniu
-    os.remove('ardon.xml')  # Usuwanie pliku XML po przetworzeniu
-    os.remove(output_path)  # Usunięcie pliku Excel z obszaru roboczego
 
 except Exception as e:
     print(f'Wystąpił błąd podczas połączenia z FTP lub przesyłania pliku: {e}')
+
+finally:
+    for file_path in ['ardon.xml', output_path]:
+        if os.path.exists(file_path):
+            os.remove(file_path)

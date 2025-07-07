@@ -5,54 +5,63 @@ from ftplib import FTP
 
 print("Jaskon - Rozpoczęto pracę nad Jaskon...")
 
+# Stałe plików
+csv_path = 'jaskon.csv'
+output_path = 'jaskon.xlsx'
+
 # URL do pliku CSV
 url = "https://pliki.jaskon.pl/37aaYdqdQmtL5jRmieTqqMrakZg3vmyhMtpwWFXXW7HjyX7eKKJHuZLRFH3nZv7C/jaskon.csv"
 
-# Pobranie pliku CSV
-response = requests.get(url, verify=False)
-if response.status_code == 200:
-    with open("jaskon.csv", 'wb') as file:
-        file.write(response.content)
-else:
-    print("Jaskon - Nie udało się pobrać pliku CSV.")
-    exit()
-
-# Wczytanie pliku CSV do DataFrame
-df = pd.read_csv("jaskon.csv", sep=';', encoding='ISO-8859-1', skiprows=1)
-
-# Zmiana nazw kolumn: 'Symbol' oraz 'Stany'
-df_selected = df[['Symbol', 'Stany']]
-df_selected['Stany'] = df_selected['Stany'].apply(lambda x: True if x != 0 else False)
-
-# Zapisanie wynikowego pliku w formacie Excel
-output_path = 'jaskon.xlsx'
-df_selected.to_excel(output_path, index=False, engine='openpyxl')
-
-# Połączenie z serwerem FTP
-ftp_server = 'ftp.antar.pl'
-ftp_login = 'jaskon'
-ftp_password = 'Kp!7EcqGafVR2'
-
 try:
-    # Nawiązanie połączenia z serwerem FTP
-    ftp = FTP(ftp_server)
-    ftp.login(ftp_login, ftp_password)
-    
-    # Przejście do folderu 'data'
-    ftp.cwd('data')
-    
-    # Otwieranie pliku i przesyłanie go na serwer FTP
-    with open(output_path, 'rb') as file:
-        ftp.storbinary(f'STOR {output_path}', file)
-    
-    print(f"Jaskon - Plik '{output_path}' został pomyślnie zapisany na serwerze FTP w folderze 'data'.")
+    # Pobranie pliku CSV
+    response = requests.get(url, verify=False)
+    response.raise_for_status()
 
-    # Zamknięcie połączenia FTP
-    ftp.quit()
-    
-    # Usunięcie lokalnego pliku po przesłaniu
-    os.remove(output_path)
-    os.remove('jaskon.csv')
+    with open(csv_path, 'wb') as file:
+        file.write(response.content)
+
+    print("Jaskon - Plik CSV został pobrany pomyślnie.")
+
+    # Wczytanie pliku CSV
+    df = pd.read_csv(csv_path, sep=';', encoding='ISO-8859-1', skiprows=1)
+
+    # Zmiana nazw kolumn i logiki dostępności
+    df_selected = df[['Symbol', 'Stany']].copy()
+    df_selected.columns = ['Kod', 'SoH']
+    df_selected['SoH'] = df_selected['SoH'].apply(lambda x: True if x != 0 else False)
+
+    # Zapis do pliku Excel
+    df_selected.to_excel(output_path, index=False, engine='openpyxl')
+
+    # Dane dostępowe do FTP
+    ftp_server = 'ftp.antar.pl'
+    ftp_login = 'jaskon'
+    ftp_password = 'Kp!7EcqGafVR2'
+
+    # Wysyłka pliku przez FTP
+    try:
+        ftp = FTP(ftp_server)
+        ftp.login(ftp_login, ftp_password)
+        ftp.cwd('data')
+
+        with open(output_path, 'rb') as file:
+            ftp.storbinary(f'STOR {output_path}', file)
+
+        print(f"Jaskon - Plik '{output_path}' został pomyślnie zapisany na serwerze FTP w folderze 'data'.")
+        ftp.quit()
+
+    except Exception as ftp_err:
+        print(f"Jaskon - Błąd FTP: {ftp_err}")
 
 except Exception as e:
-    print(f'Jaskon - Wystąpił błąd podczas połączenia z FTP lub przesyłania pliku: {e}')
+    print(f"Jaskon - Błąd ogólny: {e}")
+
+finally:
+    # Usuwanie plików tymczasowych
+    for path in [csv_path, output_path]:
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+                print(f"Jaskon - Plik tymczasowy '{path}' został usunięty.")
+            except Exception as cleanup_err:
+                print(f"Jaskon - Błąd przy usuwaniu '{path}': {cleanup_err}")

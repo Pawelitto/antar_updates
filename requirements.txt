@@ -4,3 +4,5 @@ openpyxl
 requests
 schedule
 python-dotenv
+fastapi
+uvicorn

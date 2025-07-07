@@ -4,6 +4,8 @@ import pandas as pd
 from ftplib import FTP
 import xml.etree.ElementTree as ET
 
+print("Cerva - Rozpoczęto pracę...")
+
 # Step 1: Request access token
 auth_url = "https://www.cerva.com/authorizationserver/oauth/token"
 auth_params = {
@@ -43,15 +45,13 @@ data = []
 for product in root.findall('.//product'):
     code = product.get('code')
     torun_dispo = next((int(detail.get('dispo')) for detail in product.findall('detail') if detail.get('site') == 'Toruń'), 0)
-    soh = True if torun_dispo > 0 else False
-    data.append({'KODUDOST': code, 'SoH': soh})
+    soh = torun_dispo > 0
+    data.append({'Kod': code, 'SoH': soh})
 
 # Create DataFrame
 df = pd.DataFrame(data)
 
 output_path = 'cerva.xlsx'
-
-# Save to Excel
 df.to_excel(output_path, index=False)
 
 ftp_server = 'ftp.antar.pl'
@@ -59,24 +59,20 @@ ftp_login = 'cerva'
 ftp_password = 'iqTFbP4_Nw9'
 
 try:
-  # Nawiązanie połączenia z serwerem FTP
-  ftp = FTP(ftp_server)
-  ftp.login(ftp_login, ftp_password)
-  
-  # Przejście do folderu 'data'
-  ftp.cwd('data')
-  
-  # Otwieranie pliku i przesyłanie go na serwer FTP
-  with open(output_path, 'rb') as file:
-    ftp.storbinary(f'STOR {output_path}', file)
-  
-  print(f"Cerva - Plik '{output_path}' został pomyślnie zapisany na serwerze FTP w folderze 'data'.")
+    ftp = FTP(ftp_server)
+    ftp.login(ftp_login, ftp_password)
+    ftp.cwd('data')
 
-  # Zamknięcie połączenia FTP
-  ftp.quit()
-  
-  # Usunięcie lokalnego pliku po przesłaniu
-  os.remove(output_path)
+    with open(output_path, 'rb') as file:
+        ftp.storbinary(f'STOR {output_path}', file)
+
+    print(f"Cerva - Plik '{output_path}' został pomyślnie zapisany na serwerze FTP w folderze 'data'.")
+    ftp.quit()
 
 except Exception as e:
-  print(f'Cerva - Wystąpił błąd podczas połączenia z FTP lub przesyłania pliku: {e}')
+    print(f'Cerva - Wystąpił błąd podczas połączenia z FTP lub przesyłania pliku: {e}')
+
+finally:
+    if os.path.exists(output_path):
+        os.remove(output_path)
+        print("Cerva - Plik tymczasowy został usunięty.")

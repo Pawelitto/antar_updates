@@ -1,4 +1,5 @@
 import os
+import tempfile
 import requests
 import pandas as pd
 import xml.etree.ElementTree as ET
@@ -10,54 +11,49 @@ load_dotenv()
 def run_ardon():
     print("Ardon - Rozpoczęto pracę nad Ardon...")
 
-    # Pobierz dane z env
     xml_url = os.getenv('ARDON_XML_URL')
     ftp_server = os.getenv('FTP_HOST')
     ftp_login = os.getenv('ARDON_FTP_USER')
     ftp_password = os.getenv('ARDON_FTP_PASS')
     ftp_folder = os.getenv('ARDON_FTP_FOLDER', 'data')
 
-    xml_file = 'ardon.xml'
-    excel_file = 'ardon.xlsx'
+    # 📂 Skonfiguruj pliki w katalogu tymczasowym
+    tmp_dir = tempfile.gettempdir()
+    xml_file = os.path.join(tmp_dir, 'ardon.xml')
+    excel_file = os.path.join(tmp_dir, 'ardon.xlsx')
 
     try:
         # Pobranie pliku XML
         response = requests.get(xml_url)
         response.raise_for_status()
-
-        with open(xml_file, 'wb') as file:
-            file.write(response.content)
+        with open(xml_file, 'wb') as f:
+            f.write(response.content)
 
         # Parsowanie XML
         tree = ET.parse(xml_file)
         root = tree.getroot()
 
-        # Wyciąganie danych
+        # Wydobycie danych
         item_codes = []
         amounts_in_stock = []
-
         for item in root.findall('.//SHOPITEM'):
-            item_code = item.find('ITEM_CODE').text
-            amount_in_stock = item.find('AMOUNT_IN_STOCK').text
-            item_codes.append(item_code)
-            amounts_in_stock.append(amount_in_stock)
+            item_codes.append(item.find('ITEM_CODE').text)
+            amounts_in_stock.append(item.find('AMOUNT_IN_STOCK').text)
 
-        # DataFrame
+        # DataFrame i zapis do Excela
         df = pd.DataFrame({
             'Kod': item_codes,
             'SoH': [int(x) > 0 for x in amounts_in_stock]
         })
-
-        # Zapis do Excela
         df.to_excel(excel_file, index=False, engine='openpyxl')
 
-        # FTP upload
+        # FTP - połączenie i wysyłka
         ftp = FTP(ftp_server)
         ftp.login(ftp_login, ftp_password)
         ftp.cwd(ftp_folder)
 
-        with open(excel_file, 'rb') as file:
-            ftp.storbinary(f'STOR {excel_file}', file)
+        with open(excel_file, 'rb') as f:
+            ftp.storbinary(f'STOR {os.path.basename(excel_file)}', f)
 
         ftp.quit()
         print("Ardon - Przesyłanie zakończone sukcesem.")
@@ -68,6 +64,7 @@ def run_ardon():
         return {"status": "error", "message": str(e)}
 
     finally:
+        # Sprzątanie po sobie
         for path in [xml_file, excel_file]:
             if os.path.exists(path):
                 try:

@@ -48,7 +48,8 @@ def run_ardon():
         df.to_excel(excel_file, index=False, engine='openpyxl')
 
         # FTP - połączenie i wysyłka
-        ftp = FTP(ftp_server)
+        ftp = FTP()
+        ftp.connect(host=ftp_server, port=21)
         ftp.login(ftp_login, ftp_password)
         ftp.cwd(ftp_folder)
 

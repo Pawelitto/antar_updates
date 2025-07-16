@@ -6,12 +6,18 @@ from .hermon import run_hermon
 from .jaskon import run_jaskon
 from .portwest import run_portwest
 from .ftptest import test_upload_ardon_csv
+from .test_socket import test_ftp_connection
 
 app = FastAPI()
 
 @app.get("/")
 def root():
     return {"message": "API działa!"}
+
+@app.get("/sockettest")
+def sockettest_route():
+    result = test_ftp_connection('ftp.antar.pl')
+    return JSONResponse(result)
 
 @app.get("/ftptest")
 def ftptest_route():

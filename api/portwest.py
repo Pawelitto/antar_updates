@@ -1,4 +1,5 @@
 import os
+import csv
 import tempfile
 import requests
 import pandas as pd
@@ -15,12 +16,11 @@ def run_portwest():
     ftp_server = os.getenv('FTP_HOST')
     ftp_user = os.getenv('PORTWEST_FTP_USER')
     ftp_pass = os.getenv('PORTWEST_FTP_PASS')
-    ftp_folder = os.getenv('PORTWEST_FTP_FOLDER', 'data')
 
     # Ścieżki tymczasowe
     tmp_dir = tempfile.gettempdir()
-    csv_file = os.path.join(tmp_dir, 'portwest.csv')
-    output_file = os.path.join(tmp_dir, 'portwest.xlsx')
+    csv_file = os.path.join(tmp_dir, 'portwest_temporary.csv')
+    output_file = os.path.join(tmp_dir, 'portwest.csv')
 
     try:
         # Pobranie pliku CSV
@@ -34,17 +34,23 @@ def run_portwest():
 
         # Wczytanie i przetwarzanie pliku
         df = pd.read_csv(csv_file)
-        df.rename(columns={'Item': 'Kod', 'SoH': 'SoH'}, inplace=True)
-        df['SoH'] = df['SoH'].apply(lambda x: x > 0)
 
-        # Zapis do Excela
-        df.to_excel(output_file, index=False, engine='openpyxl')
+        # Zmiana nazw kolumn i konwersja danych
+        df.rename(columns={'Item': 'ARTYKUL', 'SoH': 'DOSTEPNOSC'}, inplace=True)
+        df['DOSTEPNOSC'] = df['DOSTEPNOSC'].apply(lambda x: "TAK" if x > 0 else "NIE")
+
+        with open(output_file, 'w', encoding='utf-8') as f:
+            # Zapis nagłówka
+            f.write(f'ARTYKUL|"DOSTEPNOSC"\n')
+            
+            # Zapis wierszy
+            for _, row in df.iterrows():
+                f.write(f'{row["ARTYKUL"]}|"{row["DOSTEPNOSC"]}"\n')
 
         # Wysyłka przez FTP
         ftp = FTP()
         ftp.connect(host=ftp_server, port=21)
         ftp.login(ftp_user, ftp_pass)
-        ftp.cwd(ftp_folder)
 
         with open(output_file, 'rb') as file:
             ftp.storbinary(f'STOR {os.path.basename(output_file)}', file)

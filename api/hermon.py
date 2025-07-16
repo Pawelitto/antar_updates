@@ -12,7 +12,7 @@ def run_hermon():
 
     file_path = 'common_kody.xlsx'
     tmp_dir = tempfile.gettempdir()
-    output_file = os.path.join(tmp_dir, 'hermon.xlsx')
+    output_file = os.path.join(tmp_dir, 'hermon.csv')
 
     # Wczytywanie danych z Excela
     try:
@@ -27,16 +27,13 @@ def run_hermon():
         print(msg)
         return {"status": "error", "message": msg}
 
-    # Sprawdzenie kolumny
     if 'Kod towaru' not in excel_data.columns:
         msg = "Hermon - Brak kolumny 'Kod towaru' w pliku."
         print(msg)
         return {"status": "error", "message": msg}
 
-    # Lista kodów
     kody_towaru = excel_data['Kod towaru'].tolist()
 
-    # Dane z .env
     api_base = os.getenv('HERMON_API_URL')
     login = os.getenv('HERMON_LOGIN')
     password = os.getenv('HERMON_PASSWORD')
@@ -44,10 +41,8 @@ def run_hermon():
     ftp_server = os.getenv('FTP_HOST')
     ftp_user = os.getenv('HERMON_FTP_USER')
     ftp_pass = os.getenv('HERMON_FTP_PASS')
-    ftp_folder = os.getenv('HERMON_FTP_FOLDER', 'data')
 
     try:
-        # Autoryzacja
         auth_response = requests.post(f"{api_base}/authenticate", json={"Login": login, "Password": password})
         auth_response.raise_for_status()
 
@@ -63,34 +58,33 @@ def run_hermon():
             "Content-Type": "application/json"
         }
 
-        # Pobieranie danych
-        articles_url = f"{api_base}/articles"
-        response = requests.post(articles_url, json=kody_towaru, headers=headers)
+        response = requests.post(f"{api_base}/articles", json=kody_towaru, headers=headers)
         response.raise_for_status()
-
         data = response.json()
         print("Hermon - Dane pobrane pomyślnie.")
 
-        # Przetwarzanie danych
         results = []
         for item in data:
             kod = item.get('id')
             if not kod:
                 continue
-
             branches = item.get('branchesAvailability', [])
             quantity = branches[0].get('quantity', '0') if branches else '0'
-            soh = quantity != '0'
-            results.append({'Kod': kod, 'SoH': soh})
+            dostepnosc = "TAK" if quantity != '0' else "NIE"
+            results.append({'ARTYKUL': kod, 'DOSTEPNOSC': dostepnosc})
 
         df = pd.DataFrame(results)
-        df.to_excel(output_file, index=False, engine='openpyxl')
+
+        # Zapis do CSV z odpowiednim formatowaniem
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write('ARTYKUL|"DOSTEPNOSC"\n')
+            for _, row in df.iterrows():
+                f.write(f'{row["ARTYKUL"]}|"{row["DOSTEPNOSC"]}"\n')
 
         # Wysyłka FTP
         ftp = FTP()
         ftp.connect(host=ftp_server, port=21)
         ftp.login(ftp_user, ftp_pass)
-        ftp.cwd(ftp_folder)
 
         with open(output_file, 'rb') as f:
             ftp.storbinary(f'STOR {os.path.basename(output_file)}', f)

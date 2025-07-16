@@ -15,12 +15,10 @@ def run_ardon():
     ftp_server = os.getenv('FTP_HOST')
     ftp_login = os.getenv('ARDON_FTP_USER')
     ftp_password = os.getenv('ARDON_FTP_PASS')
-    ftp_folder = os.getenv('ARDON_FTP_FOLDER', 'data')
 
-    # 📂 Skonfiguruj pliki w katalogu tymczasowym
     tmp_dir = tempfile.gettempdir()
     xml_file = os.path.join(tmp_dir, 'ardon.xml')
-    excel_file = os.path.join(tmp_dir, 'ardon.xlsx')
+    output_file = os.path.join(tmp_dir, 'ardon.csv')
 
     try:
         # Pobranie pliku XML
@@ -34,27 +32,29 @@ def run_ardon():
         root = tree.getroot()
 
         # Wydobycie danych
-        item_codes = []
-        amounts_in_stock = []
+        data = []
         for item in root.findall('.//SHOPITEM'):
-            item_codes.append(item.find('ITEM_CODE').text)
-            amounts_in_stock.append(item.find('AMOUNT_IN_STOCK').text)
+            kod = item.find('ITEM_CODE').text
+            amount_text = item.find('AMOUNT_IN_STOCK').text
+            ilosc = int(amount_text) if amount_text.isdigit() else 0
+            dostepnosc = "TAK" if ilosc > 0 else "NIE"
+            data.append({'ARTYKUL': kod, 'DOSTEPNOSC': dostepnosc})
 
-        # DataFrame i zapis do Excela
-        df = pd.DataFrame({
-            'Kod': item_codes,
-            'SoH': [int(x) > 0 for x in amounts_in_stock]
-        })
-        df.to_excel(excel_file, index=False, engine='openpyxl')
+        df = pd.DataFrame(data)
+
+        # Zapis do CSV
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write('ARTYKUL|"DOSTEPNOSC"\n')
+            for _, row in df.iterrows():
+                f.write(f'{row["ARTYKUL"]}|"{row["DOSTEPNOSC"]}"\n')
 
         # FTP - połączenie i wysyłka
         ftp = FTP()
         ftp.connect(host=ftp_server, port=21)
         ftp.login(ftp_login, ftp_password)
-        ftp.cwd(ftp_folder)
 
-        with open(excel_file, 'rb') as f:
-            ftp.storbinary(f'STOR {os.path.basename(excel_file)}', f)
+        with open(output_file, 'rb') as f:
+            ftp.storbinary(f'STOR {os.path.basename(output_file)}', f)
 
         ftp.quit()
         print("Ardon - Przesyłanie zakończone sukcesem.")
@@ -65,8 +65,7 @@ def run_ardon():
         return {"status": "error", "message": str(e)}
 
     finally:
-        # Sprzątanie po sobie
-        for path in [xml_file, excel_file]:
+        for path in [xml_file, output_file]:
             if os.path.exists(path):
                 try:
                     os.remove(path)

@@ -18,11 +18,10 @@ client_id = os.getenv('CERVA_CLIENT_ID')
 ftp_server = os.getenv('FTP_HOST')
 ftp_login = os.getenv('CERVA_FTP_USER')
 ftp_password = os.getenv('CERVA_FTP_PASS')
-ftp_folder = os.getenv('CERVA_FTP_FOLDER', 'data')
 
 # 📂 Plik tymczasowy
 tmp_dir = tempfile.gettempdir()
-output_path = os.path.join(tmp_dir, 'cerva.xlsx')
+output_path = os.path.join(tmp_dir, 'cerva.csv')
 
 def run_cerva():
     print("Cerva - Rozpoczęto pracę...")
@@ -55,7 +54,7 @@ def run_cerva():
         dispo_feed = next(item for item in feed_data if item['feedType'] == 'DISPO')
         dispo_url = f"https://www.cerva.com{dispo_feed['downloadUrl']}"
 
-        # Step 3: Request 'DISPO' data with bearer token
+        # Step 3: Request 'DISPO' data
         dispo_response = requests.get(dispo_url, headers=headers)
         dispo_response.raise_for_status()
         dispo_xml = dispo_response.text
@@ -71,22 +70,26 @@ def run_cerva():
                 (int(detail.get('dispo')) for detail in product.findall('detail') if detail.get('site') == 'Toruń'),
                 0
             )
-            soh = torun_dispo > 0
-            data.append({'Kod': code, 'SoH': soh})
+            dostepnosc = "TAK" if torun_dispo > 0 else "NIE"
+            data.append({'ARTYKUL': code, 'DOSTEPNOSC': dostepnosc})
 
         df = pd.DataFrame(data)
-        df.to_excel(output_path, index=False, engine='openpyxl')
 
-            # FTP Upload
+        # Zapis do CSV z odpowiednim formatem
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write('ARTYKUL|"DOSTEPNOSC"\n')
+            for _, row in df.iterrows():
+                f.write(f'{row["ARTYKUL"]}|"{row["DOSTEPNOSC"]}"\n')
+
+        # FTP Upload
         try:
             ftp = FTP(ftp_server)
             ftp.login(ftp_login, ftp_password)
-            ftp.cwd(ftp_folder)
 
             with open(output_path, 'rb') as file:
                 ftp.storbinary(f'STOR {os.path.basename(output_path)}', file)
 
-            print(f"Cerva - Plik '{output_path}' został zapisany na serwerze FTP w folderze '{ftp_folder}'.")
+            print(f"Cerva - Plik '{output_path}' został zapisany na serwerze FTP.")
             ftp.quit()
 
             return {"status": "success", "message": "Przesyłanie zakończone sukcesem."}
@@ -106,4 +109,3 @@ def run_cerva():
                 print("Cerva - Plik tymczasowy został usunięty.")
             except Exception as cleanup_err:
                 print(f"Cerva - Błąd podczas usuwania pliku: {cleanup_err}")
-

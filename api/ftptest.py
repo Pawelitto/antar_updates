@@ -37,6 +37,7 @@ def test_upload_ardon_csv():
         ftp = FTP()
         ftp.connect(ftp_server, 21)
         ftp.login(ftp_user, ftp_pass)
+        ftp.set_pasv(True)
 
         with open(output_file, 'rb') as f:
             ftp.storbinary(f'STOR {os.path.basename(output_file)}', f)

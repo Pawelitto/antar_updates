@@ -6,5 +6,6 @@ def test_ftp_connection(host, port=21):
         sock.close()
         return {"status": "Połączenie powiodło się"}
     except Exception as e:
-        return {"status": "Błąd połączenia: {e}"}
+        return {"status": f"Błąd połączenia: {e}"}
+
 

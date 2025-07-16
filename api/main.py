@@ -5,12 +5,18 @@ from .cerva import run_cerva
 from .hermon import run_hermon
 from .jaskon import run_jaskon
 from .portwest import run_portwest
+from .ftptest import test_upload_ardon_csv
 
 app = FastAPI()
 
 @app.get("/")
 def root():
     return {"message": "API działa!"}
+
+@app.get("/ftptest")
+def ftptest_route():
+    result = test_upload_ardon_csv()
+    return JSONResponse(result)
 
 @app.get("/ardon")
 def ardon_route():

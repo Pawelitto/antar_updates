@@ -5,6 +5,7 @@ import pandas as pd
 import xml.etree.ElementTree as ET
 from ftplib import FTP, error_perm, all_errors
 from dotenv import load_dotenv
+from ftplib import FTP_TLS
 
 load_dotenv()
 
@@ -64,13 +65,14 @@ def run_ardon():
             raise Exception(f"Błąd zapisu do pliku CSV: {write_err}")
 
         # Krok 5: Połączenie FTP i wysyłka
-        print("Ardon - Nawiązywanie połączenia FTP...")
+        print("Ardon - Nawiązywanie połączenia FTPS (FTP-SSL)...")
         try:
-            ftp = FTP()
+            ftp = FTP_TLS()
             ftp.connect(host=ftp_server, port=21, timeout=10)
             ftp.login(user=ftp_login, passwd=ftp_password)
+            ftp.prot_p()  # Zaszyfrowany transfer danych
 
-            print("Ardon - Wysyłanie pliku CSV przez FTP...")
+            print("Ardon - Wysyłanie pliku CSV przez FTPS...")
             with open(output_file, 'rb') as f:
                 ftp.storbinary(f'STOR {os.path.basename(output_file)}', f)
         except all_errors as ftp_err:

@@ -11,8 +11,11 @@ def run_hermon():
     print("Hermon - Rozpoczęto pracę nad Hermon...")
 
     # Ustal ścieżkę absolutną do pliku 'common_kody.xlsx' znajdującego się w tym samym folderze co skrypt
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(script_dir, 'common_kody.xlsx')
+    file_path = '/home/ubuntu/antar_updates/api/common_kody.xlsx'
+
+    print(f"Hermon - Próbuję wczytać plik z: {file_path}")
+    print(f"Hermon - Czy plik istnieje? {os.path.exists(file_path)}")
+
 
     tmp_dir = tempfile.gettempdir()
     output_file = os.path.join(tmp_dir, 'hermon.csv')

@@ -10,9 +10,15 @@ load_dotenv()
 def run_hermon():
     print("Hermon - Rozpoczęto pracę nad Hermon...")
 
-    file_path = 'common_kody.xlsx'
+    # Ustal ścieżkę absolutną do pliku 'common_kody.xlsx' znajdującego się w tym samym folderze co skrypt
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(script_dir, 'common_kody.xlsx')
+
     tmp_dir = tempfile.gettempdir()
     output_file = os.path.join(tmp_dir, 'hermon.csv')
+
+    print(f"Hermon - Bieżący katalog roboczy: {os.getcwd()}")
+    print(f"Hermon - Szukam pliku pod ścieżką: {file_path}")
 
     # Wczytywanie danych z Excela
     try:
